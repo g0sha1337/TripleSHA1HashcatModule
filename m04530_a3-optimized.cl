@@ -41,8 +41,8 @@ DECLSPEC void m04530_core_vect(
     HEX_LOWER_8_CONVERT_VECT (ctx1.h[3], hex1[6], hex1[7]);
     HEX_LOWER_8_CONVERT_VECT (ctx1.h[4], hex1[8], hex1[9]);
 
-    u32x s[64] = { 0 };
-    for (u32 i = 0; i < 64; i++) s[i] = salt_buf[i];
+    u32x s[16] = { 0 };
+    for (u32 i = 0; i < 16; i++) s[i] = salt_buf[i];
 
     sha1_ctx_vector_t ctx2;
     sha1_init_vector (&ctx2);
@@ -69,62 +69,62 @@ DECLSPEC void m04530_core_vect(
     *r3 = hc_swap32 (ctx3.h[3]);
 }
 
-KERNEL_FQ KERNEL_FA void m04530_mxx (KERN_ATTR_VECTOR ())
-{
-    const u64 gid = get_global_id (0);
-    if (gid >= GID_CNT) return;
-
-    const u32 pw_len = pws[gid].pw_len;
-    const u32 salt_len = salt_bufs[SALT_POS_HOST].salt_len;
-
-    u32 s[64] = { 0 }; 
-    for (u32 i = 0; i < 64; i++) s[i] = salt_bufs[SALT_POS_HOST].salt_buf[i];
-
-    u32x pw_buf[64] = { 0 };
-    for (u32 i = 0; i < 64; i++) pw_buf[i] = pws[gid].i[i];
-    u32x w0l = pw_buf[0];
-
-    for (u32 il_pos = 0; il_pos < IL_CNT; il_pos += VECT_SIZE)
-    {
-        const u32x w0r = words_buf_r[il_pos / VECT_SIZE];
-        pw_buf[0] = w0l | w0r;
-
-        u32x r0, r1, r2, r3;
-        m04530_core_vect(pw_buf, pw_len, s, salt_len, &r0, &r1, &r2, &r3);
-        COMPARE_M_SIMD (r0, r1, r2, r3);
-    }
+#define GEN_KERNEL_M(NAME) \
+KERNEL_FQ KERNEL_FA void NAME (KERN_ATTR_VECTOR ()) \
+{ \
+    const u64 gid = get_global_id (0); \
+    if (gid >= GID_CNT) return; \
+    const u32 pw_len = pws[gid].pw_len; \
+    const u32 salt_len = salt_bufs[SALT_POS_HOST].salt_len; \
+    u32 s[16] = { 0 }; \
+    for (u32 i = 0; i < 16; i++) s[i] = salt_bufs[SALT_POS_HOST].salt_buf[i]; \
+    u32x pw_buf[16] = { 0 }; \
+    for (u32 i = 0; i < 16; i++) pw_buf[i] = pws[gid].i[i]; \
+    u32x w0l = pw_buf[0]; \
+    for (u32 il_pos = 0; il_pos < IL_CNT; il_pos += VECT_SIZE) \
+    { \
+        const u32x w0r = words_buf_r[il_pos / VECT_SIZE]; \
+        pw_buf[0] = w0l | w0r; \
+        u32x r0, r1, r2, r3; \
+        m04530_core_vect(pw_buf, pw_len, s, salt_len, &r0, &r1, &r2, &r3); \
+        COMPARE_M_SIMD (r0, r1, r2, r3); \
+    } \
 }
 
-KERNEL_FQ KERNEL_FA void m04530_sxx (KERN_ATTR_VECTOR ())
-{
-    const u64 gid = get_global_id (0);
-    if (gid >= GID_CNT) return;
-
-    const u32 search[4] =
-    {
-        digests_buf[DIGESTS_OFFSET_HOST].digest_buf[DGST_R0],
-        digests_buf[DIGESTS_OFFSET_HOST].digest_buf[DGST_R1],
-        digests_buf[DIGESTS_OFFSET_HOST].digest_buf[DGST_R2],
-        digests_buf[DIGESTS_OFFSET_HOST].digest_buf[DGST_R3]
-    };
-
-    const u32 pw_len = pws[gid].pw_len;
-    const u32 salt_len = salt_bufs[SALT_POS_HOST].salt_len;
-
-    u32 s[64] = { 0 };
-    for (u32 i = 0; i < 64; i++) s[i] = salt_bufs[SALT_POS_HOST].salt_buf[i];
-
-    u32x pw_buf[64] = { 0 };
-    for (u32 i = 0; i < 64; i++) pw_buf[i] = pws[gid].i[i];
-    u32x w0l = pw_buf[0];
-
-    for (u32 il_pos = 0; il_pos < IL_CNT; il_pos += VECT_SIZE)
-    {
-        const u32x w0r = words_buf_r[il_pos / VECT_SIZE];
-        pw_buf[0] = w0l | w0r;
-
-        u32x r0, r1, r2, r3;
-        m04530_core_vect(pw_buf, pw_len, s, salt_len, &r0, &r1, &r2, &r3);
-        COMPARE_S_SIMD (r0, r1, r2, r3);
-    }
+#define GEN_KERNEL_S(NAME) \
+KERNEL_FQ KERNEL_FA void NAME (KERN_ATTR_VECTOR ()) \
+{ \
+    const u64 gid = get_global_id (0); \
+    if (gid >= GID_CNT) return; \
+    const u32 search[4] = { \
+        digests_buf[DIGESTS_OFFSET_HOST].digest_buf[DGST_R0], \
+        digests_buf[DIGESTS_OFFSET_HOST].digest_buf[DGST_R1], \
+        digests_buf[DIGESTS_OFFSET_HOST].digest_buf[DGST_R2], \
+        digests_buf[DIGESTS_OFFSET_HOST].digest_buf[DGST_R3] \
+    }; \
+    const u32 pw_len = pws[gid].pw_len; \
+    const u32 salt_len = salt_bufs[SALT_POS_HOST].salt_len; \
+    u32 s[16] = { 0 }; \
+    for (u32 i = 0; i < 16; i++) s[i] = salt_bufs[SALT_POS_HOST].salt_buf[i]; \
+    u32x pw_buf[16] = { 0 }; \
+    for (u32 i = 0; i < 16; i++) pw_buf[i] = pws[gid].i[i]; \
+    u32x w0l = pw_buf[0]; \
+    for (u32 il_pos = 0; il_pos < IL_CNT; il_pos += VECT_SIZE) \
+    { \
+        const u32x w0r = words_buf_r[il_pos / VECT_SIZE]; \
+        pw_buf[0] = w0l | w0r; \
+        u32x r0, r1, r2, r3; \
+        m04530_core_vect(pw_buf, pw_len, s, salt_len, &r0, &r1, &r2, &r3); \
+        COMPARE_S_SIMD (r0, r1, r2, r3); \
+    } \
 }
+
+GEN_KERNEL_M(m04530_m04)
+GEN_KERNEL_M(m04530_m08)
+GEN_KERNEL_M(m04530_m16)
+GEN_KERNEL_M(m04530_m32)
+
+GEN_KERNEL_S(m04530_s04)
+GEN_KERNEL_S(m04530_s08)
+GEN_KERNEL_S(m04530_s16)
+GEN_KERNEL_S(m04530_s32)
